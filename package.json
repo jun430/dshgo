@@ -24,6 +24,17 @@
     "@deepseek-ai/schemastery": "^3.18.2",
     "qrcode": "^1.5.4"
   },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "test": "node --test test/auth.test.mjs test/proxy.test.mjs test/version.test.mjs test/device.test.mjs test/device.integration.mjs"
+  },
   "engines": {
     "node": ">=22"
   },

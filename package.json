@@ -65,5 +65,9 @@
     "appVersion": "4.4.3",
     "appApk": "https://cdn.jsdelivr.net/gh/xiazhi88/dshgo@dist-v4.4.3/dshgo-app.apk",
     "appApkFallback": "https://github.com/xiazhi88/dshgo/releases/latest/download/dshgo-app.apk"
+  },
+  "scripts": {
+    "test": "node --test test/auth.test.mjs test/proxy.test.mjs test/version.test.mjs test/shell.test.mjs",
+    "verify": "node tools/verify-shim.mjs"
   }
 }

@@ -113,6 +113,63 @@ dsh plugin --profile web add github:xiazhi88/dshgo -w
 
 端口被占用时会自动往后试 10 个（启动日志会打印实际用的那个），不影响 `dsh web` 本身。
 
+## 终端命令提权（可选：让 bash 工具本身带 root / adb）
+
+默认**关闭**。打开后，`dsh web` 里那个终端工具（模型敲 `ls`、`cat`、`dumpsys` 用的）
+**它自己**就跑在 root 或 adb shell 下 —— 不是多给你一个工具，而是把原本那个换了执行者。
+
+```yaml
+- id: dshgo
+  config:
+    shell:
+      backend: root      # off（默认）/ root / adb
+      # serial: R58M12ABCDE   # backend=adb 时可指定设备
+      # adbPath: /opt/platform-tools/adb
+```
+
+| backend | 终端命令变成 | 前提 |
+|---|---|---|
+| `off` | 原样（什么都变） | 默认，不用管 |
+| `root` | `su -c "<命令>"` | 本机有 `su` / `doas` |
+| `adb` | `adb -s <serial> shell "<命令>"` | 有 adb + 一台已授权设备 |
+
+打开后重启 `dsh web`，终端里会打一行状态。验证：
+
+```
+id                          # backend=root 时应为 uid=0(root)
+getprop ro.product.model    # backend=adb 时应为手机型号
+```
+
+### 怎么实现的（不改 DSH 一行代码）
+
+`@deepseek-ai/dsh-bash-local` 的 `execute()` 是：
+
+```js
+return this.executeArgv(spec, ['bash', '-c', spec.command]);
+```
+
+注意 `'bash'` 是**裸名字、不带路径** —— `spawn` 按 PATH 查找；而它的 env 是
+`{...ENV_OVERRIDES, ...spec.env, ...spec.dshEnv}`，**不覆盖 PATH**。
+
+所以插件在自己的进程里把 PATH 最前面插一个目录，里面放一个叫 `bash` 的转接脚本，
+就接管了全部终端命令。转接脚本只认 `bash -c <命令>` 这一种形态，其它用法
+（`bash script.sh`、`bash -l`）原样交给真 bash。
+
+为什么用 POSIX sh 而不是 Node 脚本：每条命令都要过一遍它，Node 启动约 40ms，
+一个会话几十条命令就是几秒白等；sh 是微秒级，也不依赖环境里有 node。
+
+### 边界
+
+- **默认 `off`**：装上插件，终端权限一点没变
+- **只影响跑着 `dsh web` 的那个进程树**，不动系统 PATH，不动你自己的 shell
+- **卸载/关闭时精确还原 PATH**（记录原始值，不是字符串替换 —— 否则会搞坏同进程里别的插件对 PATH 的改动）
+- 转接脚本落在 `~/.dsh/dshgo-shim/bash`，权限 0700，内容可读可审，删了会重建
+- 拿不到 `su`/`adb` 时**降级为不接管**并告警，不会让 `dsh web` 起不来
+- 空命令直接 `exit 0`，不惊动 `su`（否则每次都会弹一次授权框）
+
+> 这不是「提权漏洞」：它用的是你已经有的权限（已 root 的机器、已授权的 adb 设备）。
+> 插件做的事只是**把命令的执行者换掉**，不获取任何原本拿不到的东西。
+
 ## 设置页签
 
 装上后 DSH 设置里会多一个一级入口 **「局域网访问」**（与「通用设置 / 模型 / 插件」同级）：
